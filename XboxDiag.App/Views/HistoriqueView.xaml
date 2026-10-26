@@ -1,0 +1,188 @@
+<UserControl x:Class="XboxDiag.App.Views.HistoriqueView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1100">
+
+    <Grid Background="Transparent" Margin="36,24,36,28">
+        <Grid.RowDefinitions>
+            <!-- En-tête -->
+            <RowDefinition Height="Auto" />
+            <!-- Barre de filtre et recherche -->
+            <RowDefinition Height="Auto" />
+            <!-- DataGrid principal -->
+            <RowDefinition Height="*" />
+            <!-- Barre d'actions -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ========================================================= -->
+        <!-- 1. EN-TÊTE & OUTILS DE SAUVEGARDE                         -->
+        <!-- ========================================================= -->
+        <Border Grid.Row="0" Margin="0,0,0,18">
+            <DockPanel LastChildFill="True">
+                <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <Button Content="💾 Sauvegarder BDD"
+                            Command="{Binding SauvegarderBaseCommand}"
+                            Style="{StaticResource BtnSecondary}"
+                            Height="38"
+                            Padding="14,0"
+                            Margin="0,0,8,4"
+                            ToolTip="Créer une copie de secours complète de la base de données SQLite" />
+
+                    <Button Content="📂 Restaurer BDD"
+                            Command="{Binding RestaurerBaseCommand}"
+                            Style="{StaticResource BtnSecondary}"
+                            Height="38"
+                            Padding="14,0"
+                            Margin="0,0,8,4"
+                            ToolTip="Restaurer une copie de base de données SQLite existante" />
+
+                    <Button Content="📊 Exporter CSV"
+                            Command="{Binding ExporterCsvCommand}"
+                            Style="{StaticResource BtnSecondary}"
+                            Height="38"
+                            Padding="14,0"
+                            Margin="0,0,0,4"
+                            ToolTip="Exporter la liste actuelle des diagnostics au format tableur CSV (Excel)" />
+                </WrapPanel>
+
+                <StackPanel VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                        <Border Background="#107C10" CornerRadius="10" Padding="10,4" Margin="0,0,12,0">
+                            <TextBlock Text="ARCHIVES ATELIER" FontSize="11" FontWeight="ExtraBold" Foreground="White" />
+                        </Border>
+                        <TextBlock Text="Dossiers d'intervention &amp; Traçabilité" FontSize="12.5" FontWeight="SemiBold" Foreground="#94A3B8" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <TextBlock Text="Historique des Sessions &amp; Dossiers"
+                               FontSize="28"
+                               FontWeight="Bold"
+                               Foreground="White"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock Text="Consultez l'ensemble des diagnostics techniques, reprenez une intervention ou éditez un rapport de réparation."
+                               FontSize="14"
+                               Foreground="#CBD5E1"
+                               TextWrapping="Wrap"
+                               Margin="0,4,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ========================================================= -->
+        <!-- 2. BARRE DE FILTRES ET RECHERCHE                          -->
+        <!-- ========================================================= -->
+        <Border Grid.Row="1"
+                Background="#151A21"
+                BorderBrush="#2A333E"
+                BorderThickness="1.5"
+                CornerRadius="12"
+                Padding="16,12"
+                Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="180" />
+                    <ColumnDefinition Width="220" MinWidth="150" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Recherche textuelle -->
+                <TextBox Grid.Column="0"
+                         Text="{Binding TexteRecherche, UpdateSourceTrigger=PropertyChanged}"
+                         Height="38"
+                         FontSize="13.5"
+                         VerticalContentAlignment="Center"
+                         Margin="0,0,12,0" />
+
+                <!-- Filtre par statut -->
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding StatutsDisponibles}"
+                          SelectedItem="{Binding FiltreStatut, Mode=TwoWay}"
+                          Height="38"
+                          Margin="0,0,12,0" />
+
+                <!-- Réinitialisation -->
+                <Button Grid.Column="2"
+                        Content="Réinitialiser les filtres"
+                        Command="{Binding ReinitialiserFiltresCommand}"
+                        Style="{StaticResource BtnSecondary}"
+                        Height="38"
+                        Padding="16,0" />
+            </Grid>
+        </Border>
+
+        <!-- ========================================================= -->
+        <!-- 3. DATAGRID DES SESSIONS                                  -->
+        <!-- ========================================================= -->
+        <Border Grid.Row="2"
+                Background="#151A21"
+                BorderBrush="#2A333E"
+                BorderThickness="1.5"
+                CornerRadius="12"
+                Padding="0"
+                Margin="0,0,0,16">
+            <DataGrid ItemsSource="{Binding SessionsAffichees}"
+                      SelectedItem="{Binding SelectedSession, Mode=TwoWay}"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Session" Binding="{Binding Id, StringFormat='#{0:D4}'}" Width="85" MinWidth="70" FontWeight="Bold" />
+                    <DataGridTextColumn Header="Date" Binding="{Binding DateCreationTexte}" Width="130" MinWidth="110" />
+                    <DataGridTextColumn Header="Modèle de console" Binding="{Binding ModeleNom}" Width="2*" MinWidth="140" FontWeight="SemiBold" />
+                    <DataGridTextColumn Header="N° Série (S/N)" Binding="{Binding NumeroSerie}" Width="1.5*" MinWidth="110" />
+                    <DataGridTextColumn Header="Statut" Binding="{Binding Statut}" Width="110" MinWidth="90" FontWeight="Bold" />
+                    <DataGridTextColumn Header="Tests" Binding="{Binding NombreTests}" Width="70" MinWidth="55" />
+                    <DataGridTextColumn Header="Panne principale" Binding="{Binding PanneTitre}" Width="3*" MinWidth="160" />
+                    <DataGridTextColumn Header="Réf. Dossier" Binding="{Binding DossierRef}" Width="1.5*" MinWidth="100" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- ========================================================= -->
+        <!-- 4. BARRE D'ACTIONS INFÉRIEURE                             -->
+        <!-- ========================================================= -->
+        <Border Grid.Row="3"
+                Background="#0D1217"
+                BorderBrush="#232C36"
+                BorderThickness="0,1,0,0"
+                Padding="0,14,0,0">
+            <DockPanel LastChildFill="False">
+                <!-- Actions sur session sélectionnée -->
+                <WrapPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button Content="▶ Reprendre le diagnostic"
+                            Command="{Binding ReprendreCommand}"
+                            Style="{StaticResource BtnPrimary}"
+                            Height="42"
+                            Padding="20,0"
+                            Margin="0,0,10,4" />
+
+                    <Button Content="📄 Voir le rapport"
+                            Command="{Binding VoirRapportCommand}"
+                            Style="{StaticResource BtnSecondary}"
+                            Height="42"
+                            Padding="18,0"
+                            Margin="0,0,10,4" />
+
+                    <Button Content="🗑 Supprimer"
+                            Command="{Binding SupprimerCommand}"
+                            Style="{StaticResource BtnDanger}"
+                            Height="42"
+                            Padding="16,0"
+                            Margin="0,0,10,4" />
+                </WrapPanel>
+
+                <!-- Bouton Création rapide -->
+                <Button DockPanel.Dock="Right"
+                        Content="⚡ Nouveau diagnostic"
+                        Command="{Binding NouveauDiagnosticCommand}"
+                        Style="{StaticResource BtnPrimary}"
+                        Height="42"
+                        Padding="22,0"
+                        Margin="0,0,0,4" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>
