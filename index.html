@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Xbox Breakdown — Diagnostic et réparation de consoles Xbox</title>
+  <meta name="description" content="Xbox Breakdown : un assistant Windows de diagnostic et de réparation pour consoles Xbox One. Identifiez la console, décrivez les symptômes, suivez les tests recommandés. Projet open source en développement.">
+  <meta name="theme-color" content="#05080a">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Xbox Breakdown — Diagnostic et réparation de consoles Xbox">
+  <meta property="og:description" content="Assistant Windows de diagnostic et de réparation pour consoles Xbox One. Projet open source en développement.">
+  <meta property="og:image" content="https://ayoubhry.github.io/Xbox-Breakdown/assets/img/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script>
+    /* Séquence de démarrage : une seule fois par session */
+    try { if (!sessionStorage.getItem('xb.booted')) document.documentElement.classList.add('booting'); } catch (e) {}
+  </script>
+</head>
+<body data-page="home">
+
+  <div id="boot" aria-hidden="true">
+    <div class="boot-orb"></div>
+    <div class="boot-name">Xbox Breakdown</div>
+  </div>
+
+  <div id="wallpaper" aria-hidden="true"></div>
+  <div id="art" aria-hidden="true"></div>
+  <div class="scrim" aria-hidden="true"></div>
+
+  <header class="topbar" id="topbar">
+    <a class="profile" href="#/" data-focus aria-label="Accueil — Xbox Breakdown">
+      <span class="avatar" id="avatar"></span>
+      <span class="profile-text">
+        <span class="gamertag">XboxBreakdown <b class="badge">OPEN SOURCE</b></span>
+        <span class="gscore" title="Étoiles GitHub"><i class="g">G</i><span id="stars">—</span></span>
+      </span>
+    </a>
+
+    <nav class="topnav" id="topnav" aria-label="Navigation principale"></nav>
+
+    <div class="status" aria-label="État et heure">
+      <span id="mic" title="Micro coupé"></span>
+      <span id="battery" title="Batterie"></span>
+      <time class="tm" id="clock">--:--</time>
+      <span class="dt" id="date"></span>
+    </div>
+  </header>
+
+  <main id="view" tabindex="-1" aria-live="polite">
+    <noscript><p style="padding:12rem 4rem 4rem">Ce site reproduit l’interface d’une console et nécessite JavaScript. Le projet est disponible sur <a href="https://github.com/ayoubhry/Xbox-Breakdown">GitHub</a>.</p></noscript>
+  </main>
+
+  <div class="hints" aria-hidden="true"><span><b class="a">A</b> Sélectionner</span><span><b class="b">B</b> Retour</span></div>
+
+  <div class="dim" id="dim"></div>
+  <aside class="flyout" id="flyout" inert aria-hidden="true" role="dialog" aria-modal="true" aria-label="Détails"></aside>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="assets/js/content.js"></script>
+  <script src="assets/js/wallpapers.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
