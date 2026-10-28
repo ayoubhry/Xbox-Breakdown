@@ -6,6 +6,7 @@
 
   var C = window.XB_CONTENT;
   var WP = window.XB_WALLPAPERS;
+  var E = window.XB_ENGINE;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -56,7 +57,10 @@
     github: '<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>',
     home: '<path d="M3 11 12 3l9 8M5 10v10h5v-6h4v6h5V10"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.6v.1"/>',
-    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>'
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    download: '<path d="M12 3v12M7 10.5l5 5 5-5M4 20h16"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+    refresh: '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 20v-4h-4"/>'
   };
   function ico(name, cls) {
     return '<svg class="ico' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (ICONS[name] || '') + '</svg>';
@@ -152,7 +156,7 @@
   }
 
   /* ------------------------------------------------------------- réglages */
-  var DEFAULTS = { wallpaper: 'relief', sound: false, clock24: true, motion: true, parallax: true };
+  var DEFAULTS = { wallpaper: 'relief', sound: false, bootSound: true, clock24: true, motion: true, parallax: true };
   var settings = (function () {
     var s = Object.assign({}, DEFAULTS);
     try { Object.assign(s, JSON.parse(ls.get('xb.settings') || '{}')); } catch (e) {}
@@ -196,19 +200,31 @@
 
   /* ---------------------------------------------------------------- données */
   var REPO = { stars: null, license: null, pushed: null, issues: null };
+  var API = 'https://api.github.com/repos/' + C.repo.owner + '/' + C.repo.name;
+  var TTL = 3600000; /* 1 h : l'API publique est limitée à 60 requêtes par heure et par IP */
+  function readCache(key) {
+    try { var o = JSON.parse(ls.get(key) || 'null'); return o && typeof o.t === 'number' ? o : null; } catch (e) { return null; }
+  }
+  /* Ressource GitHub : cache frais → fichier JSON du site → API publique → cache périmé → null.
+     Le fichier `assets/data/<file>` est écrit par le workflow de déploiement (même format que l'API) :
+     il évite la limite de 60 requêtes par heure de l'API publique. Absent en local, on passe à l'API. */
+  function ghGet(path, key, file, map) {
+    var c = readCache(key);
+    if (c && Date.now() - c.t < TTL) return Promise.resolve(c.d);
+    if (!window.fetch) return Promise.resolve(c ? c.d : null);
+    var json = function (r) { return r.ok ? r.json() : Promise.reject(new Error(String(r.status))); };
+    return fetch('assets/data/' + file, { cache: 'no-cache' }).then(json)
+      .catch(function () { return fetch(API + path, { headers: { Accept: 'application/vnd.github+json' } }).then(json); })
+      .then(function (j) { var d = map(j); ls.set(key, JSON.stringify({ t: Date.now(), d: d })); return d; })
+      .catch(function () { return c ? c.d : null; });
+  }
   function loadRepo() {
-    var cached = ss.get('xb.repo');
-    try { if (cached) { var o = JSON.parse(cached); if (Date.now() - o.t < 600000) { applyRepo(o.d); return; } } } catch (e) {}
-    if (!window.fetch) return;
-    fetch('https://api.github.com/repos/' + C.repo.owner + '/' + C.repo.name, { headers: { Accept: 'application/vnd.github+json' } })
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-      .then(function (d) {
-        var data = { stars: d.stargazers_count, license: d.license && d.license.spdx_id, pushed: d.pushed_at, issues: d.open_issues_count };
-        ss.set('xb.repo', JSON.stringify({ t: Date.now(), d: data })); applyRepo(data);
-      }).catch(function () { $('#stars').textContent = '0'; });
+    ghGet('', 'xb.repo', 'repo.json', function (d) {
+      return { stars: d.stargazers_count, license: d.license && d.license.spdx_id, pushed: d.pushed_at, issues: d.open_issues_count };
+    }).then(function (d) { if (d) applyRepo(d); });
   }
   function applyRepo(d) {
-    REPO = d; $('#stars').textContent = d.stars != null ? d.stars : '0';
+    REPO = d; $('#stars').textContent = d.stars != null ? d.stars : '—';
     var box = $('#repo-stats'); if (box) box.innerHTML = repoStats();
   }
   function repoStats() {
@@ -219,10 +235,23 @@
     if (REPO.pushed) out += '<span>Dernière activité : <b>' + new Date(REPO.pushed).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) + '</b></span>';
     return out;
   }
+  /* Versions publiées (liste vide si aucune, null si l'API est injoignable). */
+  function getReleases() {
+    return ghGet('/releases?per_page=10', 'xb.releases', 'releases.json', function (list) {
+      return (Array.isArray(list) ? list : []).filter(function (r) { return !r.draft; }).map(function (r) {
+        return {
+          tag: r.tag_name, name: r.name || r.tag_name, date: r.published_at || r.created_at, body: r.body || '', url: r.html_url, pre: !!r.prerelease,
+          assets: (r.assets || []).map(function (a) { return { name: a.name, size: a.size, url: a.browser_download_url }; })
+        };
+      });
+    });
+  }
+  var safeUrl = function (u) { return /^https:\/\/(github\.com|objects\.githubusercontent\.com)\//.test(u || '') ? u : C.repo.releases; };
 
   /* ---------------------------------------------------------- barre du haut */
   var NAV = [
     { id: 'pannes', label: 'Pannes', icon: 'library' },
+    { id: 'demo', label: 'Démo du diagnostic', icon: 'assistant' },
     { id: 'fonctionnalites', label: 'Fonctionnalités', icon: 'store' },
     { id: 'roadmap', label: 'Feuille de route', badge: true },
     { id: 'recherche', label: 'Recherche', icon: 'search' },
@@ -288,6 +317,8 @@
         '<div class="row row2">' +
         '<a class="tile tile--wide t-browse" href="#/pannes" data-focus' + capAttrs('Pannes', 'Parcourir les pannes', 'Sept familles de pannes, des symptômes jusqu’aux tests recommandés.') + '>' +
         C.families.slice(0, 4).map(function (f) { return '<i style="--h:' + f.hue + '"></i>'; }).join('') + ico('wrench') + '<span class="tile-label">Parcourir les pannes</span></a>' +
+        '<a class="tile tile--wide t-demo" href="#/demo" data-focus' + capAttrs('Démo interactive', 'Essayer le diagnostic', 'Choisissez un symptôme, répondez aux tests proposés et regardez les hypothèses évoluer. Une démonstration du futur assistant.') + '>' +
+        ico('assistant') + '<span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="tile-label">Essayer le diagnostic</span></a>' +
         '<a class="tile tile--wide t-custom" href="#/parametres" data-focus' + capAttrs('Paramètres', 'Personnaliser l’accueil', 'Choisissez un fond d’écran, activez les sons de navigation, réglez l’horloge.') + '>' +
         ico('brush') + '<span class="tile-label">Personnaliser l’accueil</span></a>' +
         '<a class="tile tile--wide t-road" href="#/roadmap" data-focus' + capAttrs('Feuille de route', 'Ce qui arrive', 'Du moteur de décision à l’assistant complet : les prochaines étapes du projet.') + '>' +
@@ -301,15 +332,15 @@
     projet: function () {
       return '<section class="page" aria-label="Projet">' + page(
         head(C.project.name, esc(C.project.tagline) + '. Le projet est <strong>en développement</strong> : les fonctionnalités décrites sont des objectifs, pas encore disponibles.', 'wrench') +
-        '<div class="notice notice--soft">' + ico('info') + '<div><b>Aucune version publiée pour le moment.</b> Suivez l’avancement sur GitHub, ou regardez la <a href="#/roadmap" style="text-decoration:underline">feuille de route</a>.</div></div>' +
+        '<div class="notice notice--soft" id="release-box">' + ico('info') + '<div><b>Aucune version publiée pour le moment.</b> Suivez l’avancement sur GitHub, regardez la <a href="#/roadmap" style="text-decoration:underline">feuille de route</a> ou essayez la <a href="#/demo" style="text-decoration:underline">démo du diagnostic</a>.</div></div>' +
         '<div class="sec"><h2>Comment ça marche</h2><div class="steps">' + C.steps.map(function (s, i) {
-          return '<article class="step" tabindex="0" data-focus><i>' + (i + 1) + '</i><b>' + esc(s.title) + '</b><span>' + esc(s.text) + '</span></article>';
+          return '<article class="step" tabindex="-1" data-focus><i>' + (i + 1) + '</i><b>' + esc(s.title) + '</b><span>' + esc(s.text) + '</span></article>';
         }).join('') + '</div></div>' +
         '<div class="sec"><h2>Consoles visées</h2><div class="tiles-info">' + C.consoles.map(function (c) {
-          return '<article class="info' + (c.state === 'later' ? ' info--later' : '') + '" tabindex="0" data-focus><b>' + esc(c.name) + '</b><span>' + esc(c.note) + '</span></article>';
+          return '<article class="info' + (c.state === 'later' ? ' info--later' : '') + '" tabindex="-1" data-focus><b>' + esc(c.name) + '</b><span>' + esc(c.note) + '</span></article>';
         }).join('') + '</div></div>' +
         '<div class="sec"><h2>Technologies</h2><div class="tiles-info">' + C.tech.map(function (c) {
-          return '<article class="info" tabindex="0" data-focus><b>' + esc(c.name) + '</b><span>' + esc(c.note) + '</span></article>';
+          return '<article class="info" tabindex="-1" data-focus><b>' + esc(c.name) + '</b><span>' + esc(c.note) + '</span></article>';
         }).join('') + '</div></div>' +
         '<div class="sec"><h2>Dans le dépôt</h2><div class="tree">' + C.structure.map(function (s) {
           return '<div><b>' + esc(s.path) + '</b><span>' + esc(s.note) + '</span></div>';
@@ -318,7 +349,9 @@
           return '<details><summary data-focus>' + esc(f.q) + '</summary><p>' + esc(f.a) + '</p></details>';
         }).join('') + '</div></div>' +
         '<div class="sec"><div class="link-row"><a class="btn" href="' + C.repo.url + '" target="_blank" rel="noopener" data-focus>' + ico('github') + 'Voir sur GitHub</a>' +
-        '<a class="btn btn--ghost" href="#/pannes" data-focus>' + ico('library') + 'Parcourir les pannes</a></div></div>'
+        '<a class="btn btn--ghost" href="#/demo" data-focus>' + ico('assistant') + 'Essayer la démo</a>' +
+        '<a class="btn btn--ghost" href="#/pannes" data-focus>' + ico('library') + 'Parcourir les pannes</a>' +
+        '<a class="btn btn--ghost" href="#/journal" data-focus>' + ico('history') + 'Journal des versions</a></div></div>'
       ) + '</section>';
     },
 
@@ -326,6 +359,7 @@
       return '<section class="page" aria-label="Pannes">' + page(
         head('Pannes', 'Sept familles de pannes ciblées par l’assistant. Sélectionnez-en une pour voir les symptômes et les tests prévus.', 'library') +
         '<div class="cards">' + C.families.map(famCard).join('') + '</div>' +
+        '<div class="sec"><div class="link-row"><a class="btn" href="#/demo" data-focus>' + ico('assistant') + 'Essayer la démo du diagnostic</a></div></div>' +
         '<div class="sec"><div class="notice">' + ico('alert') + '<div><b>Avant d’intervenir sur une console :</b> débranchez-la, attendez la décharge des condensateurs et sauvegardez vos données. <a href="#/securite" style="text-decoration:underline">Lire les consignes de sécurité</a>.</div></div></div>'
       ) + '</section>';
     },
@@ -334,7 +368,7 @@
       return '<section class="page" aria-label="Fonctionnalités">' + page(
         head('Fonctionnalités', 'Ce que le logiciel doit permettre. <strong>Ce sont des objectifs</strong> : aucune de ces fonctions n’est encore disponible.', 'store') +
         '<div class="cards cards--3">' + C.features.map(function (f) {
-          return '<article class="card card--feat" tabindex="0" data-focus><span class="fi">' + ico(f.icon) + '</span><span class="card-body"><b>' + esc(f.title) + '</b><span class="card-sum">' + esc(f.text) + '</span><span class="chips"><i class="chip chip--y">Prévu</i></span></span></article>';
+          return '<article class="card card--feat" tabindex="-1" data-focus><span class="fi">' + ico(f.icon) + '</span><span class="card-body"><b>' + esc(f.title) + '</b><span class="card-sum">' + esc(f.text) + '</span><span class="chips"><i class="chip chip--y">Prévu</i></span></span></article>';
         }).join('') + '</div>'
       ) + '</section>';
     },
@@ -344,18 +378,25 @@
       return '<section class="page" aria-label="Feuille de route">' + page(
         head('Feuille de route', 'Les grandes étapes du projet, de la fondation du moteur jusqu’à l’extension aux consoles Series.', '') +
         '<ol class="timeline">' + C.roadmap.map(function (m) {
-          return '<li class="mile mile--' + m.status + '" tabindex="0" data-focus><h3>' + esc(m.title) + '<i class="chip ' + lbl[m.status][1] + '">' + lbl[m.status][0] + '</i></h3><p>' + esc(m.text) + '</p></li>';
+          return '<li class="mile mile--' + m.status + '" tabindex="-1" data-focus><h3>' + esc(m.title) + '<i class="chip ' + lbl[m.status][1] + '">' + lbl[m.status][0] + '</i></h3><p>' + esc(m.text) + '</p></li>';
         }).join('') + '</ol>'
       ) + '</section>';
     },
 
     recherche: function () {
-      var sugg = ['démarrage', 'écran noir', 'disque', 'ventilateur', 'HDMI', 'PDF', 'SQLite', 'sécurité'];
+      var sugg = ['démarrage', 'écran noir', 'disque', 'ventilateur', 'HDMI', 'démo', 'PDF', 'SQLite', 'sécurité'];
+      var rows = ['1234567890', 'azertyuiop', 'qsdfghjklm', 'wxcvbn\'-'];
+      var key = function (k) { return '<button class="key" data-focus data-key="' + k + '">' + k + '</button>'; };
+      var kb = rows.map(function (r, i) {
+        return '<div class="kb-row">' + r.split('').map(key).join('') +
+          (i === 3 ? '<button class="key key--fn" data-focus data-key="back" aria-label="Effacer le dernier caractère">⌫</button>' : '') + '</div>';
+      }).join('') +
+        '<div class="kb-row"><button class="key key--space" data-focus data-key="space">Espace</button><button class="key key--fn key--clear" data-focus data-key="clear">Tout effacer</button></div>';
       return '<section class="page" aria-label="Recherche">' + page(
         head('Recherche', 'Cherchez un symptôme, une panne, une fonctionnalité…', 'search') +
         '<label class="search-box" data-focus-box>' + ico('search') + '<input id="q" type="search" data-focus data-autofocus placeholder="Ex. : ne s’allume pas, disque, PDF…" autocomplete="off" spellcheck="false" aria-label="Rechercher"></label>' +
         '<div class="suggest" id="suggest">' + sugg.map(function (s) { return '<button class="btn btn--sm btn--ghost" data-focus data-suggest="' + esc(s) + '">' + esc(s) + '</button>'; }).join('') + '</div>' +
-        '<div id="results" aria-live="polite"></div>'
+        '<div class="search-layout"><div class="kb" role="group" aria-label="Clavier à l’écran">' + kb + '</div><div id="results" aria-live="polite"></div></div>'
       ) + '</section>';
     },
 
@@ -371,12 +412,14 @@
         '<div class="sec"><h2>Affichage et son</h2><div class="settings">' +
         sw('clock24', 'Horloge 24 heures', 'Désactivez pour un affichage 12 heures (am / pm).') +
         sw('sound', 'Sons de navigation', 'De petits bips discrets quand vous vous déplacez dans les menus.') +
+        sw('bootSound', 'Son de démarrage', 'Le jingle joué à l’ouverture du site, une fois par onglet.') +
         sw('motion', 'Animations', 'Transitions, flottement de l’illustration et séquence de démarrage.') +
         sw('parallax', 'Effet de profondeur', 'Le fond et l’illustration suivent légèrement la souris.') +
         '</div></div>' +
         '<div class="sec"><h2>Commandes</h2><div class="about">' +
         '<p><b>Clavier :</b> flèches pour naviguer, Entrée pour sélectionner, Échap ou Retour arrière pour revenir, « / » pour chercher.</p>' +
-        '<p><b>Manette :</b> croix directionnelle ou stick pour naviguer, A pour sélectionner, B pour revenir, LB / RB pour changer de page, Y pour chercher, Menu pour l’accueil.</p></div></div>' +
+        '<p><b>Manette :</b> croix directionnelle ou stick gauche pour naviguer, stick droit pour faire défiler, A pour sélectionner, B pour revenir, LB / RB pour changer de page, Y pour chercher, Menu pour l’accueil.</p>' +
+        '<p><b>Recherche :</b> un clavier à l’écran est disponible pour saisir à la manette.</p></div></div>' +
         '<div class="sec"><h2>À propos</h2><div class="about">' +
         '<p>' + esc(C.project.name) + ' — ' + esc(C.project.tagline) + '. Licence ' + esc(C.repo.license) + '.</p>' +
         '<p>' + esc(C.legal) + '</p>' +
@@ -392,12 +435,29 @@
         '<a class="btn" href="' + C.repo.url + '" target="_blank" rel="noopener" data-focus data-autofocus>' + ico('github') + 'Voir le dépôt</a>' +
         '<a class="btn btn--ghost" href="' + C.repo.newIssue + '" target="_blank" rel="noopener" data-focus>' + ico('alert') + 'Ouvrir une issue</a>' +
         '<a class="btn btn--ghost" href="' + C.repo.pulls + '" target="_blank" rel="noopener" data-focus>' + ico('branch') + 'Pull requests</a>' +
-        '<a class="btn btn--ghost" href="' + C.repo.releases + '" target="_blank" rel="noopener" data-focus>' + ico('external') + 'Versions</a></div>' +
+        '<a class="btn btn--ghost" href="#/journal" data-focus>' + ico('history') + 'Journal des versions</a>' +
+        '<a class="btn btn--ghost" href="' + C.repo.releases + '" target="_blank" rel="noopener" data-focus>' + ico('external') + 'Versions sur GitHub</a></div>' +
         '<div class="stats" id="repo-stats" style="margin-top:2.4rem">' + repoStats() + '</div>' +
         '<div class="sec"><h2>Comment participer</h2><div class="steps" style="grid-template-columns:repeat(3,1fr)">' + C.contribSteps.map(function (s, i) {
-          return '<article class="step" tabindex="0" data-focus><i>' + (i + 1) + '</i><b>' + esc(s.title) + '</b><span>' + esc(s.text) + '</span></article>';
+          return '<article class="step" tabindex="-1" data-focus><i>' + (i + 1) + '</i><b>' + esc(s.title) + '</b><span>' + esc(s.text) + '</span></article>';
         }).join('') + '</div></div>' +
         '<div class="sec"><h2>Récupérer le code</h2><div class="code"><code>git clone ' + esc(C.repo.clone) + '</code><button class="btn btn--sm" data-focus data-copy="git clone ' + esc(C.repo.clone) + '">' + ico('copy') + 'Copier</button></div></div>'
+      ) + '</section>';
+    },
+
+    demo: function () {
+      return '<section class="page" aria-label="Démo du diagnostic">' + page(
+        head('Démo du diagnostic', 'Un aperçu de la logique de l’assistant : choisissez un symptôme, réalisez les tests proposés et regardez les hypothèses évoluer après chaque réponse.', 'assistant') +
+        '<div class="notice notice--soft">' + ico('info') + '<div><b>Démonstration illustrative, pas un diagnostic.</b> ' + esc(C.demo.note) + '</div></div>' +
+        '<div id="demo-root"></div>'
+      ) + '</section>';
+    },
+
+    journal: function () {
+      return '<section class="page" aria-label="Journal des versions">' + page(
+        head('Journal des versions', 'Les versions publiées sur GitHub, de la plus récente à la plus ancienne.', 'history') +
+        '<div id="journal-root"><p class="empty" style="margin-top:0">Chargement des versions…</p></div>' +
+        '<div class="sec"><div class="link-row"><a class="btn btn--ghost" href="' + C.repo.releases + '" target="_blank" rel="noopener" data-focus>' + ico('github') + 'Toutes les versions sur GitHub</a></div></div>'
       ) + '</section>';
     },
 
@@ -406,13 +466,13 @@
         head('Consignes de sécurité', 'Une console est un appareil électrique. Quelques réflexes évitent la plupart des accidents.', 'shield') +
         '<div class="notice">' + ico('alert') + '<div><b>Important :</b> ces conseils sont généraux et ne remplacent pas l’avis d’un professionnel. En cas de doute, ne démontez pas la console.</div></div>' +
         '<div class="sec"><div class="cards cards--3">' + C.safety.map(function (s) {
-          return '<article class="card card--feat" tabindex="0" data-focus><span class="fi" style="background:rgba(255,197,61,.16);color:#ffc53d">' + ico(s.icon) + '</span><span class="card-body"><b>' + esc(s.title) + '</b><span class="card-sum">' + esc(s.text) + '</span></span></article>';
+          return '<article class="card card--feat" tabindex="-1" data-focus><span class="fi" style="background:rgba(255,197,61,.16);color:#ffc53d">' + ico(s.icon) + '</span><span class="card-body"><b>' + esc(s.title) + '</b><span class="card-sum">' + esc(s.text) + '</span></span></article>';
         }).join('') + '</div></div>'
       ) + '</section>';
     }
   };
 
-  var TITLES = { '': '', projet: 'Le projet', pannes: 'Pannes', fonctionnalites: 'Fonctionnalités', roadmap: 'Feuille de route', recherche: 'Recherche', parametres: 'Paramètres', contribuer: 'Contribuer', securite: 'Sécurité' };
+  var TITLES = { '': '', projet: 'Le projet', pannes: 'Pannes', demo: 'Démo du diagnostic', journal: 'Journal des versions', fonctionnalites: 'Fonctionnalités', roadmap: 'Feuille de route', recherche: 'Recherche', parametres: 'Paramètres', contribuer: 'Contribuer', securite: 'Sécurité' };
   var BASE_TITLE = 'Xbox Breakdown';
 
   /* -------------------------------------------------------------- recherche */
@@ -431,6 +491,7 @@
     C.faq.forEach(function (f) { out.push({ type: 'FAQ', icon: 'info', title: f.q, text: f.a, href: '#/projet', hay: f.q + ' ' + f.a }); });
     C.tech.forEach(function (f) { out.push({ type: 'Technologie', icon: 'chip', title: f.name, text: f.note, href: '#/projet', hay: f.name + ' ' + f.note }); });
     C.consoles.forEach(function (f) { out.push({ type: 'Console', icon: 'disc', title: f.name, text: f.note, href: '#/projet', hay: f.name + ' ' + f.note }); });
+    C.demo.scenarios.forEach(function (s) { out.push({ type: 'Démo', icon: s.icon, title: s.title, text: s.summary, href: '#/demo', hay: s.title + ' ' + s.summary + ' démo diagnostic' }); });
     out.forEach(function (o) { o.n = norm(o.hay); });
     return out;
   }
@@ -472,6 +533,8 @@
     var wasOpen = fly.classList.contains('open');
     if (!wasOpen) lastFocus = document.activeElement;
     fly.innerHTML = flyHTML(C.families[i], i); flyId = id;
+    fly.setAttribute('aria-label', C.families[i].name);
+    if (!wasOpen) say('Détails ouverts : ' + C.families[i].name);
     fly.removeAttribute('inert'); fly.setAttribute('aria-hidden', 'false');
     fly.classList.add('open'); dim.classList.add('open');
     $('#view').inert = true; $('#topbar').inert = true;
@@ -489,6 +552,116 @@
     if (t) t.focus({ preventScroll: true });
   }
   dim.addEventListener('click', function () { location.hash = '#/pannes'; });
+
+  /* ------------------------------------------------------------------ démo */
+  var demo = { sc: null, answers: [] };
+  var scById = function (id) { var l = C.demo.scenarios; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; };
+  var pct = function (p) { var n = Math.round(p * 100); return n === 0 && p > 0 ? '< 1' : n; };
+  var ANS = { yes: 'Oui', no: 'Non', skip: 'Non testé' };
+  function focusIn(sel) {
+    var root = $(sel), el = root && ($('[data-autofocus]', root) || $('[data-focus]', root));
+    if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'nearest', behavior: 'auto' }); }
+  }
+  function demoPicker() {
+    return '<h2>Choisissez un symptôme</h2><div class="cards">' + C.demo.scenarios.map(function (s) {
+      return '<button class="card" data-focus data-demo-sc="' + s.id + '" style="--h:' + s.hue + '"><span class="card-art">' + ico(s.icon) + '</span>' +
+        '<span class="card-body"><b>' + esc(s.title) + '</b><span class="card-sum">' + esc(s.summary) + '</span>' +
+        '<span class="chips"><i class="chip chip--g">' + s.tests.length + ' tests possibles</i></span></span></button>';
+    }).join('') + '</div>';
+  }
+  function renderDemo() {
+    var root = $('#demo-root'); if (!root) return;
+    var sc = demo.sc && scById(demo.sc);
+    if (!sc) { demo = { sc: null, answers: [] }; root.innerHTML = demoPicker(); return; }
+    root.innerHTML =
+      '<div class="demo-top"><button class="btn btn--sm btn--ghost" data-focus data-demo="restart">' + ico('arrow', 'flip') + 'Autre symptôme</button>' +
+      '<p class="demo-sym"><span>Symptôme</span><b>' + esc(sc.title) + '</b></p></div>' +
+      '<div class="demo-grid"><section aria-labelledby="dh1"><h2 id="dh1">Hypothèses</h2><ul class="hyps" id="hyps">' +
+      sc.hyps.map(function (h) {
+        return '<li class="hyp" data-hyp="' + h.id + '"><div class="hyp-row"><span>' + esc(h.label) + '</span><b>0 %</b></div><div class="bar" aria-hidden="true"><i></i></div></li>';
+      }).join('') +
+      '</ul></section><section aria-labelledby="dh2"><h2 id="dh2">Test recommandé</h2><div id="demo-next"></div></section></div>' +
+      '<div id="demo-hist"></div>';
+    void $('#hyps').offsetWidth;
+    updateDemo(true);
+  }
+  function updateDemo(first) {
+    var sc = scById(demo.sc); if (!sc) return;
+    var r = E.summarize(sc, demo.answers), list = $('#hyps');
+    r.ranked.forEach(function (h, rank) {
+      var li = $('[data-hyp="' + h.id + '"]', list); if (!li) return;
+      li.style.order = rank;
+      li.classList.toggle('hyp--top', rank === 0);
+      $('b', li).textContent = pct(h.p) + ' %';
+      $('.bar i', li).style.width = Math.max(h.p > 0 ? 1 : 0, Math.round(h.p * 100)) + '%';
+    });
+    var undo = demo.answers.length ? '<button class="btn btn--sm btn--ghost" data-focus data-demo="undo">' + ico('undo') + 'Annuler la dernière réponse</button>' : '';
+    var box = $('#demo-next');
+    if (r.done) {
+      var top = r.top, sure = r.reason === 'confident';
+      box.innerHTML = '<div class="next next--done"><p class="kicker">' + (sure ? 'Hypothèse la plus plausible' : 'Plusieurs pistes restent possibles') + '</p>' +
+        '<h3>' + esc(top.label) + ' <small>' + pct(top.p) + ' %</small></h3><p class="next-how">' + esc(top.advice) + '</p>' +
+        (sure ? '' : '<p class="next-how">Les tests de cette démo ne permettent pas de trancher. Le vrai assistant proposerait une étape de plus.</p>') +
+        '<p class="demo-warn">' + ico('alert') + '<span>Ceci n’est pas un diagnostic, seulement une démonstration. En cas de doute, ne démontez pas la console et lisez les <a href="#/securite" data-focus style="text-decoration:underline">consignes de sécurité</a>.</span></p>' +
+        '<div class="cta"><button class="btn btn--sm" data-focus data-autofocus data-demo="restart">' + ico('refresh') + 'Essayer un autre symptôme</button>' + undo + '</div></div>';
+    } else {
+      var t = r.next;
+      box.innerHTML = '<div class="next"><p class="kicker">Étape ' + r.step + ' · ' + esc(t.title) + '</p><p class="next-how">' + esc(t.how) + '</p><p class="next-q">' + esc(t.q) + '</p>' +
+        '<div class="answers"><button class="btn" data-focus data-autofocus data-ans="yes">Oui</button><button class="btn" data-focus data-ans="no">Non</button>' +
+        '<button class="btn btn--ghost" data-focus data-ans="skip">Je ne peux pas tester</button></div>' +
+        (undo ? '<div class="cta" style="margin-top:1.6rem">' + undo + '</div>' : '') + '</div>';
+    }
+    $('#demo-hist').innerHTML = demo.answers.length ? '<h2 class="hist-h">Tests réalisés</h2><ol class="hist">' + demo.answers.map(function (a, i) {
+      var t = E.findTest(sc, a.test);
+      return '<li><span class="hist-n">' + (i + 1) + '</span><span>' + esc(t ? t.title : a.test) + '</span><i class="chip ' + (a.ans === 'skip' ? 'chip--m' : 'chip--g') + '">' + ANS[a.ans] + '</i></li>';
+    }).join('') + '</ol>' : '';
+    if (!first) say(r.done
+      ? 'Conclusion : ' + r.top.label + ', ' + pct(r.top.p) + ' pour cent.'
+      : 'Hypothèse la plus plausible : ' + r.top.label + ', ' + pct(r.top.p) + ' pour cent. Étape ' + r.step + ' : ' + r.next.title + '.');
+  }
+  function demoAnswer(ans) {
+    var sc = scById(demo.sc); if (!sc) return;
+    var r = E.summarize(sc, demo.answers); if (r.done || !r.next) return;
+    demo.answers.push({ test: r.next.id, ans: ans });
+    updateDemo(); focusIn('#demo-next');
+  }
+  function demoReset() { demo = { sc: null, answers: [] }; renderDemo(); focusIn('#demo-root'); }
+
+  /* ---------------------------------------------------- journal des versions */
+  var fmtDate = function (iso) { try { return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return ''; } };
+  var fmtSize = function (n) { return n > 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko'; };
+  var plain = function (md) {
+    return String(md).replace(/\r/g, '').replace(/^#{1,6}\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\*\*|__|`/g, '').trim();
+  };
+  function initJournal() {
+    getReleases().then(function (list) {
+      var box = $('#journal-root'); if (!box) return;
+      if (list === null) {
+        box.innerHTML = '<p class="empty" style="margin-top:0">Impossible de charger les versions pour le moment (limite de l’API GitHub ou connexion coupée). Vous pouvez les consulter directement sur GitHub.</p>';
+      } else if (!list.length) {
+        box.innerHTML = '<div class="notice notice--soft">' + ico('info') + '<div><b>Aucune version publiée pour le moment.</b> Le projet est en développement : la <a href="#/roadmap" data-focus style="text-decoration:underline">feuille de route</a> montre les prochaines étapes.</div></div>';
+      } else {
+        box.innerHTML = '<ol class="timeline">' + list.map(function (r) {
+          var body = plain(r.body); if (body.length > 700) body = body.slice(0, 697) + '…';
+          return '<li class="mile mile--done" tabindex="-1" data-focus><h3>' + esc(r.name) + '<i class="chip chip--g">' + esc(r.tag) + '</i>' +
+            (r.pre ? '<i class="chip chip--y">Préversion</i>' : '') + '<i class="chip chip--m">' + esc(fmtDate(r.date)) + '</i></h3>' +
+            (body ? '<p class="rel-body">' + esc(body) + '</p>' : '') +
+            (r.assets.length ? '<div class="link-row">' + r.assets.map(function (a) {
+              return '<a class="btn btn--sm" href="' + esc(safeUrl(a.url)) + '" rel="noopener" data-focus>' + ico('download') + esc(a.name) + ' <small>' + fmtSize(a.size) + '</small></a>';
+            }).join('') + '</div>' : '') + '</li>';
+        }).join('') + '</ol>';
+      }
+    });
+  }
+  function initRelease() {
+    getReleases().then(function (list) {
+      var box = $('#release-box'); if (!box || !list || !list.length) return;
+      var r = list.filter(function (x) { return !x.pre; })[0] || list[0], a = r.assets[0];
+      box.innerHTML = ico('download') + '<div><b>Dernière version : ' + esc(r.name) + '</b>, publiée le ' + esc(fmtDate(r.date)) + '.' +
+        '<div class="cta" style="margin-top:1.4rem"><a class="btn btn--sm" href="' + esc(safeUrl(a ? a.url : r.url)) + '" rel="noopener" data-focus>' + ico('download') + (a ? 'Télécharger' : 'Voir la version') + '</a>' +
+        '<a class="btn btn--sm btn--ghost" href="#/journal" data-focus>Journal des versions</a></div></div>';
+    });
+  }
 
   /* ---------------------------------------------------------------- routeur */
   var current = null;
@@ -524,6 +697,10 @@
       current = r.page;
       if (key === 'home') { var h = $('#hero'); setCaption({ kicker: h.dataset.capKicker, title: h.dataset.capTitle, desc: h.dataset.capDesc }); }
       if (r.page === 'recherche') bindSearch();
+      if (r.page === 'demo') renderDemo();
+      if (r.page === 'journal') initJournal();
+      if (r.page === 'projet') initRelease();
+      say('Page : ' + (r.page ? TITLES[r.page] : 'Accueil'));
       if (!isMobile()) window.scrollTo(0, 0); else window.scrollTo(0, 0);
       if (!r.arg) focusInitial();
     }
@@ -541,6 +718,33 @@
   /* ------------------------------------------------------ clics délégués */
   document.addEventListener('click', function (e) {
     var t = e.target;
+    if (t.closest('#skip')) {
+      e.preventDefault();
+      var v = $('#view'), f = $('[data-autofocus]', v) || $('[data-focus]', v) || v;
+      f.focus(); return;
+    }
+    var ky = t.closest('[data-key]');
+    if (ky) {
+      var qi = $('#q'), kv = ky.dataset.key;
+      if (qi) {
+        if (kv === 'back') qi.value = qi.value.slice(0, -1);
+        else if (kv === 'clear') qi.value = '';
+        else if (kv === 'space') qi.value += ' ';
+        else qi.value += kv;
+        runSearch(qi.value);
+      }
+      sfx.ok(); return;
+    }
+    var dsc = t.closest('[data-demo-sc]');
+    if (dsc) { demo = { sc: dsc.dataset.demoSc, answers: [] }; renderDemo(); focusIn('#demo-root'); sfx.ok(); return; }
+    var dan = t.closest('[data-ans]');
+    if (dan) { demoAnswer(dan.dataset.ans); sfx.ok(); return; }
+    var dac = t.closest('[data-demo]');
+    if (dac) {
+      if (dac.dataset.demo === 'restart') demoReset();
+      else if (demo.answers.length) { demo.answers.pop(); updateDemo(); focusIn('#demo-next'); }
+      sfx.back(); return;
+    }
     var sg = t.closest('[data-suggest]');
     if (sg) { var q = $('#q'); q.value = sg.dataset.suggest; runSearch(q.value); q.focus(); sfx.ok(); return; }
     var wp = t.closest('[data-wp]');
@@ -568,6 +772,12 @@
     }
     var a = t.closest('a[href^="#/"]'); if (a) sfx.ok();
   });
+  var sayT;
+  function say(msg) {
+    var el = $('#announcer'); if (!el) return;
+    el.textContent = ''; clearTimeout(sayT);
+    sayT = setTimeout(function () { el.textContent = msg; }, 60);
+  }
   var toastT;
   function toast(msg) { var el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(function () { el.classList.remove('show'); }, 2200); }
 
@@ -575,6 +785,7 @@
   function goBack() {
     sfx.back();
     if (fly.classList.contains('open')) { location.hash = '#/pannes'; return; }
+    if (current === 'demo' && demo.sc) { demoReset(); return; }
     if (current !== '') location.hash = '#/';
   }
   function candidates() {
@@ -615,7 +826,7 @@
       best.focus({ preventScroll: true });
       best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: settings.motion ? 'smooth' : 'auto' });
     } else if (dir === 'down' || dir === 'up') {
-      var sc = scrollerOf(cur); if (sc) sc.scrollBy({ top: (dir === 'down' ? 1 : -1) * 140, behavior: 'smooth' });
+      var sc = scrollerOf(cur) || (fly.classList.contains('open') ? $('.fly-body', fly) : null); if (sc) sc.scrollBy({ top: (dir === 'down' ? 1 : -1) * 140, behavior: 'smooth' });
     }
   }
   document.addEventListener('keydown', function (e) {
@@ -649,7 +860,7 @@
   }
 
   /* ------------------------------------------------------------ manette */
-  var padState = {}, padOn = false, PAGES = ['', 'pannes', 'fonctionnalites', 'roadmap', 'recherche', 'parametres'];
+  var padState = {}, padOn = false, PAGES = ['', 'pannes', 'demo', 'fonctionnalites', 'roadmap', 'recherche', 'parametres'];
   function padLoop() {
     var pads = navigator.getGamepads ? navigator.getGamepads() : [];
     var gp = null; for (var i = 0; i < pads.length; i++) if (pads[i]) { gp = pads[i]; break; }
@@ -664,6 +875,8 @@
           else if (now - s.t > (s.rep ? 120 : 380)) { s.t = now; s.rep = true; move(d); }
         } else s.on = false;
       });
+      var ry = gp.axes[3] || 0;
+      if (Math.abs(ry) > 0.3) scrollActive(ry * 22);
       var edge = function (name, n, fn) { var on = b(n); if (on && !padState[name]) fn(); padState[name] = on; };
       edge('A', 0, function () { var el = document.activeElement; if (el && el.click) el.click(); });
       edge('B', 1, goBack);
@@ -674,6 +887,10 @@
       edge('GUIDE', 16, function () { location.hash = '#/'; });
     }
     requestAnimationFrame(padLoop);
+  }
+  function scrollActive(dy) {
+    var sc = fly.classList.contains('open') ? $('.fly-body', fly) : ($('.page') || $('.home'));
+    if (sc && sc.scrollHeight > sc.clientHeight + 4) sc.scrollTop += dy; else window.scrollBy(0, dy);
   }
   function cyclePage(d) {
     var i = PAGES.indexOf(current); if (i < 0) i = 0;
@@ -702,13 +919,48 @@
     if (!el) return;
     if (!document.documentElement.classList.contains('booting') || !settings.motion) { el.remove(); document.documentElement.classList.remove('booting'); return; }
     ss.set('xb.booted', '1');
+    var DUR = 4800;   /* durée totale de la séquence, son compris (~4 à 5 s) */
+    var FADE = 450;   /* fondu de sortie du son, qui s'achève avec l'écran */
+
+    /* Le son de démarrage suit les règles du navigateur : la lecture
+       automatique sans interaction est souvent bloquée au premier
+       chargement. On tente de le jouer tout de suite, et on retente
+       au premier geste de l'utilisateur si la tentative a échoué. */
+    var audio = null;
+    if (settings.bootSound) {
+      try {
+        audio = new Audio('assets/audio/boot.mp3');
+        audio.preload = 'auto'; audio.volume = 0.6;
+        var tryPlay = function () { audio && audio.play().catch(function () {}); };
+        tryPlay();
+        document.addEventListener('pointerdown', tryPlay, { once: true, capture: true });
+        document.addEventListener('keydown', tryPlay, { once: true, capture: true });
+      } catch (e) { audio = null; }
+    }
+    function fadeAudio() {
+      if (!audio) return;
+      var a = audio, from = a.volume || 0.6, steps = 9, i = 0;
+      var timer = setInterval(function () {
+        i++; a.volume = Math.max(0, from * (1 - i / steps));
+        if (i >= steps) { clearInterval(timer); a.pause(); }
+      }, FADE / steps);
+    }
+
+    var done = false;
     var finish = function () {
-      if (el.classList.contains('done')) return;
-      el.classList.add('done'); document.documentElement.classList.remove('booting-active');
+      if (done) return; done = true;
+      el.classList.add('done'); fadeAudio();
       setTimeout(function () { el.remove(); document.documentElement.classList.remove('booting'); }, 950);
     };
-    setTimeout(finish, 1700);
-    el.addEventListener('click', finish); document.addEventListener('keydown', finish, { once: true });
+    var auto = setTimeout(finish, DUR - FADE);
+
+    /* Un bouton « Passer », affiché après une seconde, et Échap permettent
+       d'écourter la séquence sans attendre qu'elle se termine seule. */
+    var skip = $('#bootSkip');
+    var skipTimer = setTimeout(function () { if (skip) { skip.hidden = false; requestAnimationFrame(function () { skip.classList.add('show'); }); } }, 1000);
+    function onSkip() { clearTimeout(auto); clearTimeout(skipTimer); finish(); }
+    if (skip) skip.addEventListener('click', onSkip);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') onSkip(); });
   }
 
   /* ------------------------------------------------------------------ init */
@@ -719,6 +971,9 @@
     route();
     loadRepo();
     boot();
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+    }
   }
   init();
 })();

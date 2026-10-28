@@ -181,10 +181,20 @@
     return wrap(out, defs);
   }
 
+  /* Les fonds sont déterministes : on calcule le SVG une seule fois (le relief est coûteux),
+     puis on remplace l'identifiant unique à chaque insertion dans la page. */
+  function cached(fn) {
+    var base = null, TOKEN = '\u0001';
+    return function (uid) {
+      if (base === null) base = fn(TOKEN);
+      return base.split(TOKEN).join(uid);
+    };
+  }
+
   window.XB_WALLPAPERS = {
-    relief:   { label: 'Relief',   render: relief },
-    aurore:   { label: 'Aurore',   render: aurore },
-    circuit:  { label: 'Circuit',  render: circuit },
-    emeraude: { label: 'Émeraude', render: emeraude }
+    relief:   { label: 'Relief',   render: cached(relief) },
+    aurore:   { label: 'Aurore',   render: cached(aurore) },
+    circuit:  { label: 'Circuit',  render: cached(circuit) },
+    emeraude: { label: 'Émeraude', render: cached(emeraude) }
   };
 })();

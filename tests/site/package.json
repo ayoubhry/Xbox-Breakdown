@@ -1,0 +1,13 @@
+{
+  "name": "xbox-breakdown-site-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:engine": "node --test engine.test.mjs",
+    "test:e2e": "node --test e2e.test.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

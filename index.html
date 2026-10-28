@@ -6,13 +6,39 @@
   <title>Xbox Breakdown — Diagnostic et réparation de consoles Xbox</title>
   <meta name="description" content="Xbox Breakdown : un assistant Windows de diagnostic et de réparation pour consoles Xbox One. Identifiez la console, décrivez les symptômes, suivez les tests recommandés. Projet open source en développement.">
   <meta name="theme-color" content="#05080a">
+  <link rel="canonical" href="https://ayoubhry.github.io/Xbox-Breakdown/">
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Xbox Breakdown">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:url" content="https://ayoubhry.github.io/Xbox-Breakdown/">
   <meta property="og:title" content="Xbox Breakdown — Diagnostic et réparation de consoles Xbox">
   <meta property="og:description" content="Assistant Windows de diagnostic et de réparation pour consoles Xbox One. Projet open source en développement.">
-  <meta property="og:image" content="https://ayoubhry.github.io/Xbox-Breakdown/assets/img/og.png">
+  <meta property="og:image" content="https://ayoubhry.github.io/Xbox-Breakdown/assets/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Page d’accueil de Xbox Breakdown : tuiles par famille de pannes et vue éclatée d’une console.">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Xbox Breakdown — Diagnostic et réparation de consoles Xbox">
+  <meta name="twitter:description" content="Assistant Windows de diagnostic et de réparation pour consoles Xbox One. Projet open source en développement.">
+  <meta name="twitter:image" content="https://ayoubhry.github.io/Xbox-Breakdown/assets/img/og.jpg">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="assets/css/style.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Xbox Breakdown",
+    "description": "Assistant Windows de diagnostic et de réparation pour consoles Xbox One. Projet open source en développement.",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Windows 10, Windows 11",
+    "inLanguage": "fr",
+    "license": "https://opensource.org/license/mit",
+    "url": "https://ayoubhry.github.io/Xbox-Breakdown/",
+    "sameAs": ["https://github.com/ayoubhry/Xbox-Breakdown"]
+  }
+  </script>
   <script>
     /* Séquence de démarrage : une seule fois par session */
     try { if (!sessionStorage.getItem('xb.booted')) document.documentElement.classList.add('booting'); } catch (e) {}
@@ -20,9 +46,33 @@
 </head>
 <body data-page="home">
 
+  <a class="skip" id="skip" href="#view">Aller au contenu</a>
+
   <div id="boot" aria-hidden="true">
-    <div class="boot-orb"></div>
+    <div class="boot-orb">
+      <svg viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+        <defs>
+          <radialGradient id="xbBootG" cx="35%" cy="30%" r="80%">
+            <stop offset="0" stop-color="#b9ffc9"/><stop offset=".35" stop-color="#3ddc51"/><stop offset="1" stop-color="#0b5a12"/>
+          </radialGradient>
+        </defs>
+        <g class="spin" style="animation-duration:9s">
+          <circle cx="100" cy="100" r="94" fill="none" stroke="rgba(110,255,150,.45)" stroke-width="2" stroke-dasharray="2 10" stroke-linecap="round"/>
+        </g>
+        <circle cx="100" cy="100" r="82" fill="none" stroke="rgba(110,255,150,.25)" stroke-width="1"/>
+        <circle class="pulse" style="animation-delay:0s" cx="100" cy="18" r="3.4" fill="#8dffa4"/>
+        <circle class="pulse" style="animation-delay:.18s" cx="182" cy="100" r="3.4" fill="#8dffa4"/>
+        <circle class="pulse" style="animation-delay:.36s" cx="100" cy="182" r="3.4" fill="#8dffa4"/>
+        <circle class="pulse" style="animation-delay:.54s" cx="18" cy="100" r="3.4" fill="#8dffa4"/>
+        <g transform="translate(25 25) scale(2.344)">
+          <rect width="64" height="64" rx="14" fill="#071014"/>
+          <circle cx="32" cy="32" r="22" fill="url(#xbBootG)"/>
+          <path d="M38.5 21.5a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0l5.6-5.6a13 13 0 0 1-17.2 17.2l-10.4 10.4a4.2 4.2 0 0 1-6-6L26.9 32.1a13 13 0 0 1 17.2-17.2z" fill="none" stroke="#04200a" stroke-width="3" stroke-linejoin="round" transform="translate(-4 0) scale(.92)"/>
+        </g>
+      </svg>
+    </div>
     <div class="boot-name">Xbox Breakdown</div>
+    <button type="button" class="boot-skip" id="bootSkip" hidden>Passer <span aria-hidden="true">›</span></button>
   </div>
 
   <div id="wallpaper" aria-hidden="true"></div>
@@ -48,8 +98,15 @@
     </div>
   </header>
 
-  <main id="view" tabindex="-1" aria-live="polite">
-    <noscript><p style="padding:12rem 4rem 4rem">Ce site reproduit l’interface d’une console et nécessite JavaScript. Le projet est disponible sur <a href="https://github.com/ayoubhry/Xbox-Breakdown">GitHub</a>.</p></noscript>
+  <main id="view" tabindex="-1">
+    <noscript>
+      <div style="padding:12rem 4rem 4rem;max-width:90rem">
+        <h1>Xbox Breakdown</h1>
+        <p>Assistant Windows de diagnostic et de réparation pour consoles Xbox One. Projet open source en développement : aucune version n’est publiée pour le moment.</p>
+        <p>Sept familles de pannes sont ciblées : alimentation et démarrage, affichage, lecteur optique, stockage et système, refroidissement, connectique, électronique.</p>
+        <p>Ce site reproduit l’interface d’une console et nécessite JavaScript. Le projet est disponible sur <a href="https://github.com/ayoubhry/Xbox-Breakdown">GitHub</a>.</p>
+      </div>
+    </noscript>
   </main>
 
   <div class="hints" aria-hidden="true"><span><b class="a">A</b> Sélectionner</span><span><b class="b">B</b> Retour</span></div>
@@ -57,9 +114,11 @@
   <div class="dim" id="dim"></div>
   <aside class="flyout" id="flyout" inert aria-hidden="true" role="dialog" aria-modal="true" aria-label="Détails"></aside>
   <div class="toast" id="toast" role="status"></div>
+  <div class="sr-only" id="announcer" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/js/content.js"></script>
   <script src="assets/js/wallpapers.js"></script>
+  <script src="assets/js/demo-engine.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>

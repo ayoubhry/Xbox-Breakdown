@@ -163,5 +163,102 @@ window.XB_CONTENT = {
     { title: 'Proposer une pull request', text: 'Expliquez vos changements pour une relecture.' }
   ],
 
+  /* ---------- Démo interactive du diagnostic ----------
+     `prior` : probabilité de départ de chaque hypothèse (normalisée automatiquement).
+     `py`    : pour chaque test, probabilité de répondre « Oui » SI l'hypothèse est la bonne.
+     Valeurs illustratives : remplacez-les par celles de votre moteur (XboxDiag.Core).
+     Aucun test de la démo ne demande d'ouvrir la console ni de mesurer une valeur. */
+  demo: {
+    note: "Les scénarios et leurs pondérations sont des exemples simplifiés, pas des statistiques de panne. Aucun test de cette démo n'oblige à ouvrir la console ni à mesurer une tension.",
+    scenarios: [
+      {
+        id: 'allumage', family: 'alimentation', icon: 'power', hue: 8,
+        title: "La console ne s'allume pas",
+        summary: "Aucun signe de vie quand vous appuyez sur le bouton.",
+        hyps: [
+          { id: 'secteur', label: 'Câble ou prise secteur', prior: 0.30, advice: "Remplacez le câble secteur et testez une autre prise murale, sans multiprise." },
+          { id: 'alim', label: "Bloc d'alimentation (externe ou interne selon le modèle)", prior: 0.30, advice: "L'alimentation est la piste principale. Selon le modèle, elle peut être externe (à remplacer) ou interne (à confier à un professionnel)." },
+          { id: 'bouton', label: 'Bouton ou commande de mise en marche', prior: 0.15, advice: "Utilisez la manette pour allumer la console et confirmez que le bouton est en cause avant toute réparation." },
+          { id: 'carte', label: 'Carte mère ou composant', prior: 0.25, advice: "Panne interne : à confier à un professionnel, sauf si vous maîtrisez l'électronique. Lisez d'abord les consignes de sécurité." }
+        ],
+        tests: [
+          { id: 'autre-cable', title: 'Autre câble, autre prise', how: "Branchez la console sur une autre prise murale avec un autre câble secteur compatible, sans multiprise.", q: "La console s'allume-t-elle ?", py: { secteur: 0.95, alim: 0.05, bouton: 0.05, carte: 0.03 } },
+          { id: 'manette', title: 'Allumer avec la manette', how: "Essayez d'allumer la console avec la manette plutôt qu'avec le bouton de la console.", q: 'La console démarre-t-elle ?', py: { secteur: 0.03, alim: 0.03, bouton: 0.9, carte: 0.03 } },
+          { id: 'voyant', title: 'Observer les voyants', how: "Regardez le voyant de la console (ou de sa brique, si votre modèle en a une) pendant quelques secondes après le branchement.", q: "Un voyant s'allume-t-il, même brièvement ?", py: { secteur: 0.1, alim: 0.35, bouton: 0.8, carte: 0.65 } },
+          { id: 'debrancher', title: 'Débrancher puis rebrancher', how: "Débranchez le câble secteur, attendez une minute, rebranchez et essayez de démarrer.", q: 'La console démarre-t-elle maintenant ?', py: { secteur: 0.08, alim: 0.3, bouton: 0.1, carte: 0.06 } }
+        ]
+      },
+      {
+        id: 'ecran-noir', family: 'affichage', icon: 'display', hue: 210,
+        title: 'Écran noir, mais la console démarre',
+        summary: "Le voyant est allumé et le ventilateur tourne, mais aucune image.",
+        hyps: [
+          { id: 'hdmi', label: 'Câble HDMI', prior: 0.25, advice: "Remplacez le câble HDMI et branchez-le directement sur l'écran, sans répartiteur." },
+          { id: 'ecran', label: 'Écran ou entrée sélectionnée', prior: 0.20, advice: "Vérifiez l'entrée sélectionnée sur l'écran, puis essayez un autre écran." },
+          { id: 'reso', label: 'Résolution ou paramètre vidéo non pris en charge', prior: 0.20, advice: "Redémarrez en mode vidéo réduit (procédure officielle du fabricant), puis réglez la résolution." },
+          { id: 'port', label: 'Port HDMI de la console', prior: 0.20, advice: "Un port abîmé se répare par soudure : réservé aux profils expérimentés, sinon confiez la console à un professionnel." },
+          { id: 'carte', label: 'Sortie vidéo ou carte mère', prior: 0.15, advice: "Panne interne : après avoir écarté câble, écran et paramètres, faites examiner la console par un professionnel." }
+        ],
+        tests: [
+          { id: 'autre-hdmi', title: 'Autre câble HDMI', how: "Remplacez le câble par un autre en bon état, branché directement sur l'écran.", q: "L'image apparaît-elle ?", py: { hdmi: 0.92, ecran: 0.04, reso: 0.04, port: 0.04, carte: 0.02 } },
+          { id: 'autre-ecran', title: 'Autre écran ou autre entrée', how: "Branchez la console sur un autre écran, ou sélectionnez une autre entrée HDMI.", q: "L'image apparaît-elle ?", py: { hdmi: 0.05, ecran: 0.92, reso: 0.35, port: 0.04, carte: 0.02 } },
+          { id: 'mode-reduit', title: 'Mode vidéo réduit', how: "Suivez la procédure officielle du fabricant pour démarrer en basse résolution.", q: "L'image apparaît-elle ?", py: { hdmi: 0.05, ecran: 0.08, reso: 0.9, port: 0.03, carte: 0.02 } },
+          { id: 'inspecter-port', title: 'Inspecter le port HDMI', how: "Éclairez le port de la console, appareil débranché : broches tordues, plastique cassé, connecteur qui bouge ?", q: 'Le port est-il visiblement abîmé ?', py: { hdmi: 0.05, ecran: 0.03, reso: 0.03, port: 0.85, carte: 0.10 } }
+        ]
+      },
+      {
+        id: 'disque', family: 'lecteur', icon: 'disc', hue: 275,
+        title: 'Les disques ne sont pas lus',
+        summary: "Le lecteur refuse les disques ou ne les reconnaît pas.",
+        hyps: [
+          { id: 'disque', label: 'Disque rayé ou sale', prior: 0.30, advice: "Nettoyez le disque avec un chiffon doux, du centre vers le bord, ou remplacez-le." },
+          { id: 'lecteur', label: 'Lecteur défaillant (optique ou mécanique)', prior: 0.35, advice: "Le lecteur est probablement en cause : son remplacement est la piste habituelle. Console débranchée avant tout accès." },
+          { id: 'liaison', label: 'Connectique interne du lecteur', prior: 0.10, advice: "Une nappe ou un connecteur mal enfoncé est possible : à vérifier console débranchée, ou à confier à un professionnel." },
+          { id: 'logiciel', label: 'Blocage logiciel temporaire', prior: 0.25, advice: "Redémarrez complètement la console et vérifiez que le système est à jour." }
+        ],
+        tests: [
+          { id: 'autres-disques', title: 'Essayer plusieurs disques', how: "Insérez deux ou trois autres disques propres, en bon état.", q: 'Au moins un autre disque est-il lu ?', py: { disque: 0.92, lecteur: 0.12, liaison: 0.08, logiciel: 0.35 } },
+          { id: 'ejection', title: "Tester l'éjection", how: "Insérez puis éjectez un disque plusieurs fois.", q: 'Le disque entre et sort sans blocage ?', py: { disque: 0.9, lecteur: 0.35, liaison: 0.5, logiciel: 0.8 } },
+          { id: 'bruit', title: 'Écouter le lecteur', how: "Insérez un disque et écoutez : cliquetis, grattement, rotation qui s'arrête puis reprend.", q: 'Entendez-vous un bruit anormal ?', py: { disque: 0.25, lecteur: 0.8, liaison: 0.1, logiciel: 0.1 } },
+          { id: 'redemarrage', title: 'Redémarrage complet', how: "Éteignez complètement la console (pas de veille), débranchez-la une minute, rebranchez et réessayez.", q: 'Le disque est-il lu après ce redémarrage ?', py: { disque: 0.05, lecteur: 0.04, liaison: 0.03, logiciel: 0.7 } }
+        ]
+      },
+      {
+        id: 'chauffe', family: 'refroidissement', icon: 'fan', hue: 178,
+        title: 'Ventilateur bruyant ou surchauffe',
+        summary: "La console souffle fort, chauffe ou s'éteint toute seule.",
+        hyps: [
+          { id: 'poussiere', label: 'Aérations obstruées par la poussière', prior: 0.35, advice: "Dégagez les aérations, console débranchée et refroidie, avec un chiffon sec ou de l'air sec." },
+          { id: 'emplacement', label: 'Emplacement mal ventilé', prior: 0.20, advice: "Déplacez la console à l'air libre, loin des autres appareils, et laissez de l'espace autour des aérations." },
+          { id: 'ventilo', label: 'Ventilateur usé', prior: 0.25, advice: "Le ventilateur est à remplacer : intervention interne, console débranchée et refroidie." },
+          { id: 'pate', label: 'Pâte thermique dégradée', prior: 0.20, advice: "Le renouvellement de la pâte demande d'ouvrir la console : réservé aux profils expérimentés." }
+        ],
+        tests: [
+          { id: 'aerations', title: 'Contrôler les aérations', how: "Regardez les grilles d'aération, console éteinte et débranchée.", q: 'Les aérations sont-elles visiblement encrassées ?', py: { poussiere: 0.95, emplacement: 0.35, ventilo: 0.3, pate: 0.25 } },
+          { id: 'emplacement', title: "Contrôler l'emplacement", how: "Observez où se trouve la console : meuble fermé, tapis, empilée sur un autre appareil ?", q: 'Est-elle placée dans un endroit mal ventilé ?', py: { poussiere: 0.2, emplacement: 0.95, ventilo: 0.2, pate: 0.2 } },
+          { id: 'grincement', title: 'Écouter le ventilateur', how: "Console en marche, écoutez à quelques dizaines de centimètres : souffle régulier ou bruit mécanique ?", q: 'Entendez-vous un grincement ou un frottement (et non un simple souffle) ?', py: { poussiere: 0.1, emplacement: 0.05, ventilo: 0.85, pate: 0.1 } },
+          { id: 'apres-degagement', title: 'Après dégagement', how: "Placez la console à l'air libre et dégagez les aérations (console débranchée et refroidie), puis réessayez.", q: 'Le problème persiste-t-il ?', py: { poussiere: 0.1, emplacement: 0.1, ventilo: 0.8, pate: 0.85 } }
+        ]
+      },
+      {
+        id: 'erreur', family: 'stockage', icon: 'drive', hue: 38,
+        title: 'Erreur système au démarrage',
+        summary: "Un code d'erreur s'affiche ou le démarrage reste bloqué.",
+        hyps: [
+          { id: 'transitoire', label: 'Blocage logiciel temporaire', prior: 0.30, advice: "Un redémarrage complet suffit généralement. Aucune réinitialisation n'est nécessaire." },
+          { id: 'maj', label: 'Système ou mise à jour corrompu', prior: 0.30, advice: "Utilisez le dépannage officiel en conservant vos jeux et applications. Sauvegardez vos données avant toute réinitialisation complète." },
+          { id: 'disque', label: 'Disque dur défaillant', prior: 0.25, advice: "Sauvegardez ce qui peut l'être tout de suite : un disque défaillant peut lâcher complètement. Remplacement à prévoir." },
+          { id: 'liaison', label: 'Connectique du disque', prior: 0.15, advice: "Une connexion de disque instable est possible : à vérifier console débranchée, ou à confier à un professionnel." }
+        ],
+        tests: [
+          { id: 'redemarrage', title: 'Redémarrage complet', how: "Éteignez complètement la console, débranchez-la une minute, rebranchez puis redémarrez.", q: "L'erreur a-t-elle disparu ?", py: { transitoire: 0.85, maj: 0.1, disque: 0.05, liaison: 0.08 } },
+          { id: 'repetition', title: "Noter quand l'erreur survient", how: "Relancez deux ou trois fois et notez le code affiché et le moment où il apparaît.", q: "L'erreur revient-elle à chaque fois, au même moment ?", py: { transitoire: 0.1, maj: 0.8, disque: 0.75, liaison: 0.6 } },
+          { id: 'bruit-disque', title: 'Écouter le disque', how: "Écoutez la console au démarrage : cliquetis répétitifs ou arrêts brusques ?", q: 'Entendez-vous un bruit répétitif venant du disque ?', py: { transitoire: 0.03, maj: 0.05, disque: 0.6, liaison: 0.1 } },
+          { id: 'depannage', title: 'Menu de dépannage', how: "Lancez le dépannage système avec la procédure officielle du fabricant, sans choisir de réinitialisation complète.", q: "Le menu de dépannage s'affiche-t-il ?", py: { transitoire: 0.9, maj: 0.85, disque: 0.4, liaison: 0.4 } }
+        ]
+      }
+    ]
+  },
+
   legal: "Projet indépendant et non officiel. Xbox est une marque de Microsoft ; ce site et ce logiciel ne sont ni affiliés, ni approuvés, ni sponsorisés par Microsoft."
 };
